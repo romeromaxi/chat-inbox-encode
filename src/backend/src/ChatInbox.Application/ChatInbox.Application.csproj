@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ChatInbox.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ChatInbox.Contracts\ChatInbox.Contracts.csproj" />
+    <ProjectReference Include="..\ChatInbox.Domain\ChatInbox.Domain.csproj" />
+  </ItemGroup>
+</Project>

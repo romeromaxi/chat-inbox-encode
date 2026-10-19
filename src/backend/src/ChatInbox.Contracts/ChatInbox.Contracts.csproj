@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>ChatInbox.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,5 @@
+<div class="message-list" role="log" aria-live="polite">
+  @for (message of messages(); track message.id) {
+    <app-message-bubble [message]="message" />
+  }
+</div>

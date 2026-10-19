@@ -1,0 +1,13 @@
+<section
+  class="conversation-panel"
+  aria-label="Selected conversation"
+  [class.conversation-panel--empty]="!store.selectedConversation()"
+  [attr.aria-busy]="store.selectedHistoryLoading()"
+>
+  @if (store.selectedConversation(); as conversation) {
+    <app-conversation-header [conversation]="conversation" />
+    <app-message-list [messages]="store.selectedMessages()" />
+  } @else {
+    <app-empty-conversation-state />
+  }
+</section>

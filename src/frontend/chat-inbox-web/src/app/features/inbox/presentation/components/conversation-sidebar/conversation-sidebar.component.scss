@@ -1,0 +1,27 @@
+:host {
+  min-width: 0;
+  border-right: var(--border-width) solid var(--color-border);
+  box-shadow: 0.25rem 0 1.5rem var(--color-shadow);
+  z-index: 1;
+}
+
+.conversation-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  background: var(--color-surface);
+}
+
+.conversation-sidebar__header {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+h1 {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}

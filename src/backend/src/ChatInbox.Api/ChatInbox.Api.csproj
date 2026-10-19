@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>ChatInbox.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ChatInbox.Application\ChatInbox.Application.csproj" />
+    <ProjectReference Include="..\ChatInbox.Contracts\ChatInbox.Contracts.csproj" />
+    <ProjectReference Include="..\ChatInbox.Infrastructure\ChatInbox.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

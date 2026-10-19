@@ -1,0 +1,15 @@
+:host {
+  min-width: 0;
+}
+
+.conversation-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  background: var(--color-surface-muted);
+}
+
+.conversation-panel--empty {
+  grid-template-rows: 1fr;
+  place-items: center;
+}

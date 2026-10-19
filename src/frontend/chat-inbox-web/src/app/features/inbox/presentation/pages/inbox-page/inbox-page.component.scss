@@ -1,0 +1,12 @@
+:host {
+  display: block;
+  height: 100dvh;
+}
+
+.inbox-shell {
+  display: grid;
+  grid-template-columns: 30% 70%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-background);
+}

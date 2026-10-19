@@ -1,0 +1,9 @@
+<div class="conversation-list" role="list">
+  @for (conversation of store.visibleConversations(); track conversation.conversationId) {
+    <app-conversation-list-item
+      [conversation]="conversation"
+      [selected]="store.selectedConversationId() === conversation.conversationId"
+      (conversationOpened)="openConversation($event)"
+    />
+  }
+</div>

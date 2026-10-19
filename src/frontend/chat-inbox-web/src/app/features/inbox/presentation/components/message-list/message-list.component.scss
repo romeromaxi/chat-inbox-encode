@@ -1,0 +1,12 @@
+:host {
+  min-height: 0;
+}
+
+.message-list {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  overflow-y: auto;
+}

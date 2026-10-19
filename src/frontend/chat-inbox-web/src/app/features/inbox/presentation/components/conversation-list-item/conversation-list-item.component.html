@@ -1,0 +1,32 @@
+<article role="listitem">
+  <button
+    class="conversation-list-item"
+    type="button"
+    [class.conversation-list-item--selected]="selected()"
+    (click)="openConversation()"
+  >
+    <span class="conversation-list-item__avatar" aria-hidden="true">
+      @if (initials(); as value) {
+        {{ value }}
+      } @else {
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0H5Z" />
+        </svg>
+      }
+    </span>
+    <span class="conversation-list-item__content">
+      <span class="conversation-list-item__header">
+        <strong>{{ primaryName() }}</strong>
+        @if (conversation().unreadCount > 0) {
+          <span class="conversation-list-item__unread" aria-label="Unread messages">
+            {{ conversation().unreadCount }}
+          </span>
+        }
+      </span>
+      @if (secondaryName(); as name) {
+        <span class="conversation-list-item__secondary-name">{{ name }}</span>
+      }
+      <span class="conversation-list-item__preview">{{ conversation().lastMessage.text }}</span>
+    </span>
+  </button>
+</article>

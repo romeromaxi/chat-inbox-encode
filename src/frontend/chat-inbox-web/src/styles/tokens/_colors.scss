@@ -1,0 +1,15 @@
+@mixin colors {
+  --color-primary: #0f5560;
+  --color-primary-hover: #0b4650;
+  --color-on-primary: #ffffff;
+  --color-accent: #5cd6d6;
+  --color-background: #edf3f3;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f8f8;
+  --color-surface-highlighted: #def5f5;
+  --color-text: #17343a;
+  --color-text-muted: #64777b;
+  --color-border: #d5e1e2;
+  --color-focus-ring: #5cd6d6;
+  --color-shadow: rgb(15 85 96 / 12%);
+}

@@ -1,0 +1,100 @@
+:host {
+  display: block;
+}
+
+article {
+  margin: 0;
+}
+
+.conversation-list-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  color: var(--color-text);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.conversation-list-item:has(.conversation-list-item__unread) {
+  background: var(--color-surface-highlighted);
+}
+
+.conversation-list-item:hover,
+.conversation-list-item--selected {
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+}
+
+.conversation-list-item__content {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.conversation-list-item__avatar {
+  display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+}
+
+.conversation-list-item__avatar svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: currentColor;
+}
+
+.conversation-list-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+strong {
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-list-item__secondary-name {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-list-item__unread {
+  display: inline-grid;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding-inline: var(--space-1);
+  place-items: center;
+  border-radius: 999px;
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+}
+
+.conversation-list-item__preview {
+  overflow: hidden;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

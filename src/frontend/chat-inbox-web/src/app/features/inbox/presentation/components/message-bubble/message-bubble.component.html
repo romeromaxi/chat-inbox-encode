@@ -1,0 +1,9 @@
+<article
+  class="message-bubble"
+  [class.message-bubble--outgoing]="message().direction === 'outgoing'"
+>
+  <p>{{ message().text }}</p>
+  <time [attr.datetime]="message().telegramSentAt">
+    {{ message().telegramSentAt | inboxDateTime }}
+  </time>
+</article>
