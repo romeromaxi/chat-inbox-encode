@@ -4,19 +4,19 @@
     <textarea
       id="message-text"
       rows="2"
-      placeholder="Write a message"
+      placeholder="Escriba un mensaje"
       [formControl]="messageControl"
       [attr.maxlength]="maxMessageLength"
       [readOnly]="sending()"
       (input)="sendFailed.set(false)"
     ></textarea>
     <button type="submit" [disabled]="sending() || messageControl.invalid">
-      {{ sending() ? 'Sending…' : 'Send' }}
+      {{ sending() ? 'Enviando…' : 'Enviar' }}
     </button>
   </div>
   <div class="message-composer__meta" aria-live="polite">
     @if (sendFailed()) {
-      <span role="alert">Message could not be sent. Try again.</span>
+      <span role="alert">El mensaje no pudo ser enviado. Intente nuevamente.</span>
     } @else {
       <span></span>
     }

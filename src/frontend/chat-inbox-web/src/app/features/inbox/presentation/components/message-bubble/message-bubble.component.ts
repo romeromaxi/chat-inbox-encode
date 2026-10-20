@@ -14,10 +14,10 @@ export class MessageBubbleComponent {
 
   protected readonly statusLabel = computed(() => {
     const labels: Record<MessageSummary['status'], string> = {
-      received: 'Received',
-      pending: 'Pending',
-      sent: 'Sent',
-      failed: 'Failed',
+      received: 'Recibido',
+      pending: 'Pendiente',
+      sent: 'Enviado',
+      failed: 'Error',
     };
 
     return labels[this.message().status];

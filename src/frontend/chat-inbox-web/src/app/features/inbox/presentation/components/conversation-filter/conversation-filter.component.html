@@ -4,13 +4,13 @@
     [attr.aria-pressed]="store.activeFilter() === 'all'"
     (click)="selectFilter('all')"
   >
-    All
+    Todos
   </button>
   <button
     type="button"
     [attr.aria-pressed]="store.activeFilter() === 'unread'"
     (click)="selectFilter('unread')"
   >
-    Unread
+    No leídos
   </button>
 </div>
