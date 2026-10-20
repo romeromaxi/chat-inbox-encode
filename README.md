@@ -4,7 +4,7 @@ Bandeja conversacional para recibir mensajes de texto enviados a un bot de Teleg
 
 ## Estado actual
 
-El circuito entrante está implementado:
+Los circuitos entrante y saliente están implementados:
 
 1. La API registra automáticamente el webhook de Telegram al iniciar.
 2. `POST /webhooks/telegram` valida `X-Telegram-Bot-Api-Secret-Token`.
@@ -14,17 +14,20 @@ El circuito entrante está implementado:
 6. El Worker publica una actualización de conversación en RabbitMQ.
 7. La API consume esa actualización y emite `conversationUpdated` mediante SignalR en `/hubs/inbox`.
 8. Angular recibe el evento y actualiza el listado visible en tiempo real.
+9. El operador envía una respuesta desde Angular y la API la persiste en estado `Pending`.
+10. La API publica el envío en RabbitMQ y responde `202 Accepted` sin esperar a Telegram.
+11. El Worker consume el mensaje saliente y lo envía mediante Telegram Bot API.
+12. Si Telegram lo acepta, el mensaje pasa a `Sent`; después de un intento inicial y dos reintentos fallidos, pasa a `Failed` y se publica en la DLQ.
+13. Cada transición se propaga mediante RabbitMQ y SignalR para actualizar el estado visible en Angular.
 
-También están implementados los Dockerfiles de API, Worker, Migrator y frontend, la migración EF Core `InitialCreate`, su ejecución one-shot desde Compose, los endpoints de health y 14 tests unitarios.
+También están implementados los Dockerfiles de API, Worker, Migrator y frontend, las migraciones EF Core, su ejecución one-shot desde Compose, los endpoints de health y tests unitarios de componentes clave.
 
-El backend expone listado de conversaciones, filtro unread, historial y marcado como leído. Angular carga las conversaciones persistidas al iniciar, abre su historial y aplica el marcado optimista con reversión ante error.
+El backend expone listado de conversaciones, filtro unread, historial, marcado como leído y creación asíncrona de respuestas. Angular carga las conversaciones persistidas al iniciar, abre su historial y aplica marcado y envío optimistas con reversión ante error.
 
 Todavía no están implementados:
 
 - el saludo automático aprobado;
-- el envío manual de respuestas desde la bandeja;
-- los estados salientes `Pending`, `Sent` y `Failed`;
-- reintentos y DLQ para mensajes salientes;
+- una acción de reintento manual para mensajes que ya quedaron en `Failed`.
 
 ## Contratos implementados
 
@@ -40,6 +43,7 @@ Todavía no están implementados:
 | `GET /api/conversations` | Lista conversaciones; acepta `unreadOnly=true|false`, default `false`. |
 | `GET /api/conversations/{conversationId}/messages` | Devuelve historial ascendente o `404`. |
 | `POST /api/conversations/{conversationId}/read` | Marca leído sin body; devuelve `204` o `404`. |
+| `POST /api/conversations/{conversationId}/messages` | Persiste una respuesta `Pending`, la publica en RabbitMQ y devuelve `202`; devuelve `400` para texto vacío o mayor a 4096 caracteres y `404` si la conversación no existe. |
 
 El webhook responde:
 
@@ -56,9 +60,11 @@ La topología actual usa un exchange topic durable y colas durables:
 | --- | --- | --- |
 | Exchange | `chat-inbox` | — |
 | Entrada Telegram | `chat-inbox.telegram.incoming-text` | `telegram.message.received` |
-| Actualización para API | `chat-inbox.api.conversation-updates` | `conversation.message.received` |
+| Salida hacia Telegram | `chat-inbox.telegram.outgoing-text` | `telegram.message.send` |
+| Fallo definitivo saliente (DLQ) | `chat-inbox.telegram.outgoing-text.failed` | `telegram.message.failed` |
+| Actualización para API | `chat-inbox.api.conversation-updates` | `conversation.updated` |
 
-Los mensajes publicados son persistentes, usan `MessageId`, publisher confirms y `mandatory: true`. Los consumidores trabajan con prefetch `1` y acknowledgement manual. Esta topología implementa recepción y actualización realtime; la topología saliente hacia Telegram aún no existe.
+Los mensajes publicados son persistentes, usan `MessageId`, publisher confirms y `mandatory: true`. Los consumidores trabajan con prefetch `1` y acknowledgement manual. El envío realiza un intento inicial y hasta dos reintentos con demoras de `1s` y `3s`, ambas con jitter aleatorio de `±20%`. Si Telegram no acepta el mensaje después de esos intentos, se publica el fallo en la DLQ y el estado persistido cambia a `Failed`.
 
 ### Registro del webhook
 
@@ -154,7 +160,7 @@ dotnet build .\src\backend\ChatInbox.sln --configuration Release --no-restore
 dotnet test .\src\backend\ChatInbox.sln --configuration Release --no-build
 ```
 
-El suite actual contiene 14 tests: siete casos del mapper de updates de Telegram, cuatro del validador de secret, uno del registro del webhook y dos del dominio de conversaciones.
+El suite cubre el mapper de updates de Telegram, el validador de secret, el registro del webhook, invariantes de dominio y componentes clave del envío saliente.
 
 ### Frontend
 
@@ -193,7 +199,7 @@ Durante el primer arranque ocurre esta secuencia:
 
 1. Docker descarga las imágenes base y compila `web`, `api`, `worker` y `migrator`.
 2. PostgreSQL y RabbitMQ esperan hasta estar saludables.
-3. El servicio one-shot `migrator` ejecuta `Database.MigrateAsync()` y aplica `InitialCreate`.
+3. El servicio one-shot `migrator` ejecuta `Database.MigrateAsync()` y aplica todas las migraciones pendientes.
 4. `migrator` finaliza con código `0`; verlo como `Exited (0)` es normal.
 5. API y Worker arrancan sólo después de esa finalización exitosa.
 6. API registra el webhook en Telegram y queda healthy cuando PostgreSQL y RabbitMQ responden.
@@ -226,7 +232,14 @@ No hace falta instalar `dotnet-ef`, construir una cadena de conexión en la term
 
 La consola RabbitMQ Management se autentica con el valor de `RABBITMQ_USER` como usuario y `RABBITMQ_PASSWORD` como contraseña. Compose toma ambos valores de `.env`; no es necesario imprimirlos en logs ni copiarlos a otro archivo.
 
-En `Queues and Streams` se pueden inspeccionar `chat-inbox.telegram.incoming-text` y `chat-inbox.api.conversation-updates`. Es normal ver `0` mensajes listos: Worker y API consumen y confirman los eventos casi inmediatamente. RabbitMQ muestra colas, consumidores y tasas de publicación/entrega; el historial funcional queda persistido en PostgreSQL.
+En `Queues and Streams` se pueden inspeccionar:
+
+- `chat-inbox.telegram.incoming-text` para entradas desde Telegram;
+- `chat-inbox.telegram.outgoing-text` para respuestas pendientes de envío;
+- `chat-inbox.telegram.outgoing-text.failed` para fallos salientes definitivos;
+- `chat-inbox.api.conversation-updates` para cambios enviados a SignalR.
+
+Es normal ver `0` mensajes listos en las colas activas: Worker y API consumen y confirman los eventos casi inmediatamente. RabbitMQ muestra colas, consumidores y tasas de publicación/entrega; el historial funcional y los estados quedan persistidos en PostgreSQL. La DLQ conserva el evento de un envío que agotó su política de reintentos para poder diagnosticarlo; no implica un reintento manual automático.
 
 La API local y Management están ligados a `127.0.0.1`, por lo que no escuchan en interfaces externas. RabbitMQ usa una red dedicada no interna para publicar exclusivamente Management; el tráfico AMQP permanece en su red interna. PostgreSQL, el puerto AMQP de RabbitMQ y la interfaz local de inspección de ngrok no publican puertos al host en la topología base.
 
@@ -294,8 +307,42 @@ El campo `result.url` debe coincidir con `NGROK_RESERVED_URL` más `/webhooks/te
 5. Ejecutar primero `/health/live` y `/health/ready`.
 6. Generar al menos una conversación enviando texto privado al bot o simulando el webhook.
 7. Probar listado, `unreadOnly`, historial y marcado como leído.
+8. Para validar sólo el contrato saliente sin enviar un mensaje real, revisar el ejemplo de `POST /api/conversations/{conversationId}/messages` pero no ejecutarlo.
+9. Para una prueba punta a punta deliberada, reemplazar `conversationId`, escribir un texto identificable y ejecutar el endpoint una sola vez. La respuesta inmediata será `202` con estado `pending`; consultar luego el historial para comprobar la transición a `sent` o `failed`.
 
 Los endpoints de health y conversaciones no requieren autenticación. Para probar `POST /webhooks/telegram`, configurar en APIDog el valor de `TELEGRAM_WEBHOOK_SECRET_TOKEN` como API key del header `X-Telegram-Bot-Api-Secret-Token`; no guardar ni compartir el secreto fuera del environment local. El archivo describe health, webhook y los contratos HTTP de conversaciones ya implementados.
+
+`POST /api/conversations/{conversationId}/messages` no es una simulación: crea el mensaje, lo publica en RabbitMQ y puede entregarlo al usuario real de Telegram asociado a la conversación. Para inspeccionar sin enviar accidentalmente, usar los endpoints `GET`, la vista previa de APIDog o un `conversationId` inexistente, que responde `404` antes de publicar. No reutilizar un contacto real para pruebas destructivas o repetitivas.
+
+Para verificar validación sin generar un envío se puede ejecutar el endpoint con texto vacío; debe responder `400` y no publica en RabbitMQ:
+
+```powershell
+Invoke-WebRequest `
+    -Method Post `
+    -Uri "http://127.0.0.1:5080/api/conversations/00000000-0000-0000-0000-000000000000/messages" `
+    -ContentType "application/json" `
+    -Body '{"text":""}' `
+    -SkipHttpErrorCheck
+```
+
+Para una entrega real y deliberada, obtener primero el `conversationId` desde `GET /api/conversations`. Este comando envía el texto al contacto de Telegram de esa conversación:
+
+```powershell
+$conversationId = Read-Host "conversationId real"
+$messageText = Read-Host "Texto que se enviará a Telegram"
+$body = @{ text = $messageText } | ConvertTo-Json
+
+$pendingMessage = Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://127.0.0.1:5080/api/conversations/$conversationId/messages" `
+    -ContentType "application/json" `
+    -Body $body
+
+$pendingMessage
+Invoke-RestMethod "http://127.0.0.1:5080/api/conversations/$conversationId/messages"
+```
+
+Si se configuró otro `API_PORT`, reemplazar `5080`. La primera respuesta debe ser `pending`; la segunda consulta permite observar `sent` o `failed` después del procesamiento asíncrono.
 
 ## 10. Simular un webhook local
 
@@ -362,9 +409,12 @@ Resultado esperado:
 Para verificar persistencia:
 
 ```powershell
+$env:POSTGRES_USER = Read-Host "POSTGRES_USER configurado en .env"
+$env:POSTGRES_DATABASE = Read-Host "POSTGRES_DATABASE configurado en .env"
+
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres `
     psql -U $env:POSTGRES_USER -d $env:POSTGRES_DATABASE `
-    -c 'SELECT "Text", "TelegramSentAt", "ReceivedAt" FROM messages ORDER BY "Id" DESC LIMIT 5;'
+    -c 'SELECT "Text", "Direction", "Status", "TelegramSentAt", "ReceivedAt" FROM messages ORDER BY "Id" DESC LIMIT 5;'
 ```
 
 Usar un `update_id` diferente en cada prueba. El backend trata `TelegramUpdateId` como idempotency key y la base posee un índice único.
@@ -377,18 +427,26 @@ Usar un `update_id` diferente en cada prueba. El backend trata `TelegramUpdateId
 4. Confirmar consumo y persistencia en logs de Worker.
 5. Verificar que la conversación aparece en tiempo real en Angular.
 6. Comprobar que `TelegramSentAt` y `ReceivedAt` se almacenan por separado.
-7. Repetir un update simulado con el mismo `update_id` y comprobar que no se duplica en PostgreSQL.
+7. Abrir la conversación y responder desde la bandeja con un texto breve.
+8. Comprobar que el mensaje aparece primero como `Pending` y que la conversación se posiciona por la fecha de creación de ese mensaje.
+9. Confirmar que la respuesta llega al chat de Telegram y cambia a `Sent`; `Sent` significa que Telegram Bot API aceptó el envío, no que el destinatario lo leyó.
+10. Repetir un update simulado con el mismo `update_id` y comprobar que no se duplica en PostgreSQL.
 
-No intentar todavía responder desde la bandeja ni validar el saludo automático: esos flujos permanecen pendientes. El listado, historial y marcado como leído pueden probarse tanto desde la interfaz como mediante APIDog.
+El saludo automático todavía no está implementado. El listado, historial, marcado como leído y envío saliente pueden probarse tanto desde la interfaz como mediante APIDog. Para observar transiciones salientes:
 
-## Decisiones aprobadas todavía pendientes de implementación
+```powershell
+docker compose logs --follow worker api
+```
 
-- El saludo inicial será exactamente: “Hola, ¿en qué podemos ayudarte?”.
-- El saludo se enviará una sola vez ante el primer texto válido de un contacto nuevo.
-- Las respuestas del operador usarán `Pending`, `Sent` y `Failed`.
-- `LastMessageAt` se actualizará al crear `Pending`; `Sent` sólo cambiará estado y `Failed` conservará la posición.
-- Los reintentos salientes serán a `1s` y `3s`, ambos con jitter `±20%`; después se usará DLQ y `Failed`.
-- La conversación activa leída permanecerá visible con contador `0` en el filtro unread hasta cambiar de conversación.
+También se puede volver a ejecutar `GET /api/conversations/{conversationId}/messages`. Un fallo de envío se reintenta dos veces; si persiste, el mensaje queda en estado `Failed` y se publica un evento en `chat-inbox.telegram.outgoing-text.failed`.
+
+## Decisiones aprobadas y estado
+
+- El saludo inicial será exactamente “Hola, ¿en qué podemos ayudarte?” y se enviará una sola vez ante el primer texto válido de un contacto nuevo; continúa pendiente.
+- Las respuestas del operador usan `Pending`, `Sent` y `Failed`; está implementado.
+- `LastMessageAt` se actualiza al crear `Pending`; `Sent` sólo cambia el estado y `Failed` conserva la posición; está implementado.
+- Los reintentos salientes son a `1s` y `3s`, ambos con jitter `±20%`; después se usa DLQ y `Failed`; está implementado.
+- La conversación activa leída permanece visible con contador `0` en el filtro unread hasta cambiar de conversación; está implementado.
 
 Los ADR aceptados se enumeran en [docs/decisions/README.md](docs/decisions/README.md). Las decisiones aún sin resolver están en [docs/architecture/open-decisions.md](docs/architecture/open-decisions.md).
 
@@ -401,12 +459,12 @@ infra/ingress/               Proxy público exclusivo para el webhook
 docs/architecture/           Arquitectura y decisiones pendientes
 docs/decisions/              ADR aceptados y plantilla
 docs/api/openapi.yaml         Contrato OpenAPI importable en APIDog
-tests/backend/               Tests unitarios del webhook
+tests/backend/               Tests unitarios del backend
 ```
 
 ## Persistencia local
 
 PostgreSQL y RabbitMQ usan volúmenes Docker con nombre. Reiniciar o reconstruir contenedores conserva datos, usuarios y credenciales iniciales del volumen.
 
-`docker compose down --volumes` elimina de forma irreversible los datos locales, el esquema migrado, los usuarios de PostgreSQL y el estado del broker. En el siguiente `docker compose up --build`, PostgreSQL se inicializa nuevamente con el `.env` vigente y `migrator` vuelve a aplicar `InitialCreate`.
+`docker compose down --volumes` elimina de forma irreversible los datos locales, el esquema migrado, los usuarios de PostgreSQL y el estado del broker. En el siguiente `docker compose up --build`, PostgreSQL se inicializa nuevamente con el `.env` vigente y `migrator` vuelve a aplicar todas las migraciones.
 

@@ -17,6 +17,7 @@ export class ConversationUpdatedMapper {
         id: event.lastMessage.id,
         text: event.lastMessage.text,
         direction: event.lastMessage.direction,
+        status: event.lastMessage.status,
         telegramSentAt: event.lastMessage.telegramSentAt,
         receivedAt: event.lastMessage.receivedAt,
       },

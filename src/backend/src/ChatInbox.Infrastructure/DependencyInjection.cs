@@ -1,5 +1,6 @@
 using ChatInbox.Application.Abstractions;
 using ChatInbox.Application.Conversations;
+using ChatInbox.Application.Messages;
 using ChatInbox.Infrastructure.Messaging;
 using ChatInbox.Infrastructure.Persistence;
 using ChatInbox.Infrastructure.Telegram;
@@ -22,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IInboxRepository, InboxRepository>();
         services.AddScoped<IConversationReader, ConversationReader>();
         services.AddScoped<IMarkConversationReadHandler, MarkConversationReadHandler>();
+        services.AddScoped<IQueueOutgoingMessageHandler, QueueOutgoingMessageHandler>();
 
         services.AddOptions<RabbitMqOptions>()
             .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
@@ -33,6 +35,24 @@ public static class DependencyInjection
 
         services.AddSingleton<IRabbitMqConnection, RabbitMqConnection>();
         services.AddSingleton<IIntegrationEventPublisher, RabbitMqIntegrationEventPublisher>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddTelegramMessaging(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<TelegramOptions>()
+            .Bind(configuration.GetSection(TelegramOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.BotToken), "Telegram:BotToken is required")
+            .ValidateOnStart();
+
+        services.AddHttpClient<ITelegramMessageSender, TelegramMessageSender>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.telegram.org/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        }).RemoveAllLoggers();
 
         return services;
     }

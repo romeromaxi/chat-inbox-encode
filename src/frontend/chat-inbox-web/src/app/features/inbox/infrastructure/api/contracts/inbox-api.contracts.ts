@@ -9,8 +9,13 @@ export interface MessageSummaryDto {
   readonly id: string;
   readonly text: string;
   readonly direction: 'incoming' | 'outgoing';
+  readonly status: 'received' | 'pending' | 'sent' | 'failed';
   readonly telegramSentAt: string;
   readonly receivedAt: string;
+}
+
+export interface SendMessageRequestDto {
+  readonly text: string;
 }
 
 export interface ConversationSummaryDto {

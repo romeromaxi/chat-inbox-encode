@@ -12,12 +12,15 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasKey(message => message.Id);
         builder.Property(message => message.Id).UseIdentityByDefaultColumn();
         builder.Property(message => message.PublicId).IsRequired();
-        builder.Property(message => message.TelegramUpdateId).IsRequired();
-        builder.Property(message => message.TelegramMessageId).IsRequired();
+        builder.Property(message => message.TelegramUpdateId);
+        builder.Property(message => message.TelegramMessageId);
         builder.Property(message => message.Text)
             .HasMaxLength(Message.MaximumTextLength)
             .IsRequired();
         builder.Property(message => message.Direction)
+            .HasConversion<short>()
+            .IsRequired();
+        builder.Property(message => message.Status)
             .HasConversion<short>()
             .IsRequired();
         builder.Property(message => message.TelegramSentAt)

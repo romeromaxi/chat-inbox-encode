@@ -24,6 +24,7 @@ export class InboxApiMapper {
       id: dto.id,
       text: dto.text,
       direction: dto.direction,
+      status: dto.status,
       telegramSentAt: dto.telegramSentAt,
       receivedAt: dto.receivedAt,
     };

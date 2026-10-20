@@ -1,9 +1,17 @@
 <article
   class="message-bubble"
   [class.message-bubble--outgoing]="message().direction === 'outgoing'"
+  [class.message-bubble--failed]="message().status === 'failed'"
 >
   <p>{{ message().text }}</p>
-  <time [attr.datetime]="message().telegramSentAt">
-    {{ message().telegramSentAt | inboxDateTime }}
-  </time>
+  <span class="message-bubble__meta">
+    <time [attr.datetime]="message().telegramSentAt">
+      {{ message().telegramSentAt | inboxDateTime }}
+    </time>
+    @if (message().direction === 'outgoing') {
+      <span class="message-bubble__status" [attr.data-status]="message().status">
+        {{ statusLabel() }}
+      </span>
+    }
+  </span>
 </article>

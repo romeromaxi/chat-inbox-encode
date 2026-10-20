@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { ConversationSummary } from '../../../domain/models/conversation-summary';
+import { ConnectionStatus } from '../../../domain/models/connection-status';
 
 @Component({
   selector: 'app-conversation-header',
@@ -9,6 +10,8 @@ import { ConversationSummary } from '../../../domain/models/conversation-summary
 })
 export class ConversationHeaderComponent {
   readonly conversation = input.required<ConversationSummary>();
+  readonly connectionStatus = input.required<ConnectionStatus>();
+  readonly closeRequested = output<void>();
 
   protected readonly fullName = computed(() => {
     const { firstName, lastName } = this.conversation().contact;
@@ -23,5 +26,16 @@ export class ConversationHeaderComponent {
   protected readonly secondaryName = computed(() => {
     const username = this.conversation().contact.username?.trim();
     return username && this.fullName() ? this.fullName() : null;
+  });
+
+  protected readonly connectionLabel = computed(() => {
+    const labels: Record<ConnectionStatus, string> = {
+      connected: 'Connected',
+      connecting: 'Connecting',
+      reconnecting: 'Reconnecting',
+      disconnected: 'Disconnected',
+    };
+
+    return labels[this.connectionStatus()];
   });
 }

@@ -43,6 +43,7 @@ public sealed class ConversationReader(IDbContextFactory<ChatInboxDbContext> dbC
                         message.PublicId,
                         message.Text,
                         message.Direction,
+                        message.Status,
                         message.TelegramSentAt,
                         message.ReceivedAt
                     })
@@ -62,6 +63,7 @@ public sealed class ConversationReader(IDbContextFactory<ChatInboxDbContext> dbC
                     conversation.LastMessage.PublicId,
                     conversation.LastMessage.Text,
                     ToContractDirection(conversation.LastMessage.Direction),
+                    ToContractStatus(conversation.LastMessage.Status),
                     conversation.LastMessage.TelegramSentAt,
                     conversation.LastMessage.ReceivedAt),
                 conversation.UnreadCount,
@@ -95,6 +97,7 @@ public sealed class ConversationReader(IDbContextFactory<ChatInboxDbContext> dbC
                 message.PublicId,
                 message.Text,
                 message.Direction,
+                message.Status,
                 message.TelegramSentAt,
                 message.ReceivedAt
             })
@@ -105,6 +108,7 @@ public sealed class ConversationReader(IDbContextFactory<ChatInboxDbContext> dbC
                 message.PublicId,
                 message.Text,
                 ToContractDirection(message.Direction),
+                ToContractStatus(message.Status),
                 message.TelegramSentAt,
                 message.ReceivedAt))
             .ToArray();
@@ -116,5 +120,15 @@ public sealed class ConversationReader(IDbContextFactory<ChatInboxDbContext> dbC
             MessageDirection.Incoming => "incoming",
             MessageDirection.Outgoing => "outgoing",
             _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+        };
+
+    private static string ToContractStatus(MessageStatus status) =>
+        status switch
+        {
+            MessageStatus.Received => "received",
+            MessageStatus.Pending => "pending",
+            MessageStatus.Sent => "sent",
+            MessageStatus.Failed => "failed",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
         };
 }

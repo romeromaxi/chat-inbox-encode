@@ -4,7 +4,11 @@ import { map, Observable } from 'rxjs';
 import { InboxRepositoryPort } from '../../application/ports/inbox-repository.port';
 import { ConversationSummary, MessageSummary } from '../../domain/models/conversation-summary';
 import { InboxApiMapper } from '../mappers/inbox-api.mapper';
-import { ConversationSummaryDto, MessageSummaryDto } from './contracts/inbox-api.contracts';
+import {
+  ConversationSummaryDto,
+  MessageSummaryDto,
+  SendMessageRequestDto,
+} from './contracts/inbox-api.contracts';
 
 const CONVERSATIONS_URL = '/api/conversations';
 
@@ -27,5 +31,13 @@ export class HttpInboxRepositoryAdapter implements InboxRepositoryPort {
 
   markAsRead(conversationId: string): Observable<void> {
     return this.httpClient.post<void>(`${CONVERSATIONS_URL}/${conversationId}/read`, null);
+  }
+
+  sendMessage(conversationId: string, text: string): Observable<MessageSummary> {
+    const request: SendMessageRequestDto = { text };
+
+    return this.httpClient
+      .post<MessageSummaryDto>(`${CONVERSATIONS_URL}/${conversationId}/messages`, request)
+      .pipe(map((message) => this.mapper.toMessage(message)));
   }
 }

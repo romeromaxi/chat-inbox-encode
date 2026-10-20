@@ -22,14 +22,26 @@
   background: var(--color-surface-highlighted);
 }
 
+.message-bubble--failed {
+  border-color: #b33b3b;
+}
+
 p {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-time {
-  justify-self: end;
+.message-bubble__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-small);
+}
+
+.message-bubble__status[data-status='failed'] {
+  color: #a52626;
+  font-weight: var(--font-weight-semibold);
 }

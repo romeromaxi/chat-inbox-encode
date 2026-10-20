@@ -18,6 +18,10 @@ public interface IInboxRepository
         Guid conversationId,
         CancellationToken cancellationToken);
 
+    Task<Message?> GetMessageByPublicIdAsync(
+        Guid messageId,
+        CancellationToken cancellationToken);
+
     Task<Message> GetLatestMessageAsync(
         long conversationId,
         CancellationToken cancellationToken);

@@ -14,6 +14,10 @@ RUN dotnet publish src/ChatInbox.Migrator/ChatInbox.Migrator.csproj --configurat
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS final
 WORKDIR /app
+USER root
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 USER $APP_UID
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "ChatInbox.Migrator.dll"]

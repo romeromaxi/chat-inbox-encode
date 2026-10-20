@@ -1,0 +1,25 @@
+<form (submit)="send($event)">
+  <label for="message-text">Reply</label>
+  <div class="message-composer__controls">
+    <textarea
+      id="message-text"
+      rows="2"
+      placeholder="Write a message"
+      [formControl]="messageControl"
+      [attr.maxlength]="maxMessageLength"
+      [readOnly]="sending()"
+      (input)="sendFailed.set(false)"
+    ></textarea>
+    <button type="submit" [disabled]="sending() || messageControl.invalid">
+      {{ sending() ? 'Sending…' : 'Send' }}
+    </button>
+  </div>
+  <div class="message-composer__meta" aria-live="polite">
+    @if (sendFailed()) {
+      <span role="alert">Message could not be sent. Try again.</span>
+    } @else {
+      <span></span>
+    }
+    <span>{{ messageControl.value.length }} / {{ maxMessageLength }}</span>
+  </div>
+</form>

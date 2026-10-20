@@ -1,10 +1,11 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, EMPTY, finalize, take } from 'rxjs';
+import { catchError, defer, EMPTY, finalize, map, Observable, take, tap, throwError } from 'rxjs';
 import { INBOX_REPOSITORY_PORT } from '../ports/inbox-repository.port';
 import { CONVERSATION_UPDATES_PORT } from '../ports/conversation-updates.port';
 import { InboxStore } from '../state/inbox.store';
+import { InboxFilter } from '../../domain/models/inbox-filter';
 
 @Injectable({ providedIn: 'root' })
 export class InboxFacade {
@@ -30,8 +31,12 @@ export class InboxFacade {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((conversation) => {
         this.store.upsertConversation(conversation);
-        this.store.appendMessage(conversation.conversationId, conversation.lastMessage);
+        this.store.upsertMessage(conversation.conversationId, conversation.lastMessage);
       });
+
+    this.conversationUpdates.connectionStatus
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((status) => this.store.setConnectionStatus(status));
 
     this.conversationUpdates.connect().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
 
@@ -62,6 +67,42 @@ export class InboxFacade {
     if (this.canMarkAsRead()) {
       this.markAsRead(conversationId);
     }
+  }
+
+  closeConversation(): void {
+    this.store.selectConversation(null);
+  }
+
+  setFilter(filter: InboxFilter): void {
+    this.closeConversation();
+    this.store.setActiveFilter(filter);
+  }
+
+  sendMessage(text: string): Observable<void> {
+    return defer(() => {
+      const conversationId = this.store.selectedConversationId();
+
+      if (!conversationId) {
+        return EMPTY;
+      }
+
+      const snapshot = this.store.optimisticallySendMessage(conversationId, text);
+
+      if (!snapshot) {
+        return EMPTY;
+      }
+
+      return this.inboxRepository.sendMessage(conversationId, text).pipe(
+        take(1),
+        tap((message) => this.store.confirmOptimisticMessage(snapshot, message)),
+        map(() => undefined),
+        catchError((error: unknown) => {
+          this.store.rollbackOptimisticMessage(snapshot);
+          return throwError(() => error);
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      );
+    });
   }
 
   private loadMessages(conversationId: string): void {

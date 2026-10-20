@@ -9,7 +9,8 @@ export interface ConversationUpdatedEvent {
   readonly lastMessage: {
     readonly id: string;
     readonly text: string;
-    readonly direction: 'incoming';
+    readonly direction: 'incoming' | 'outgoing';
+    readonly status: 'received' | 'pending' | 'sent' | 'failed';
     readonly telegramSentAt: string;
     readonly receivedAt: string;
   };

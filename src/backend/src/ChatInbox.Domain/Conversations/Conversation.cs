@@ -66,4 +66,12 @@ public sealed class Conversation
     }
 
     public void MarkAsRead() => UnreadCount = 0;
+
+    public Message SendMessage(string text, DateTimeOffset createdAt)
+    {
+        var message = Message.CreateOutgoing(this, text, createdAt);
+        _messages.Add(message);
+        LastMessageAt = createdAt;
+        return message;
+    }
 }

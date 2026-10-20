@@ -5,8 +5,13 @@
   [attr.aria-busy]="store.selectedHistoryLoading()"
 >
   @if (store.selectedConversation(); as conversation) {
-    <app-conversation-header [conversation]="conversation" />
+    <app-conversation-header
+      [conversation]="conversation"
+      [connectionStatus]="store.connectionStatus()"
+      (closeRequested)="inboxFacade.closeConversation()"
+    />
     <app-message-list [messages]="store.selectedMessages()" />
+    <app-message-composer />
   } @else {
     <app-empty-conversation-state />
   }

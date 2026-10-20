@@ -125,13 +125,16 @@ namespace ChatInbox.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("TelegramMessageId")
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<long?>("TelegramMessageId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("TelegramSentAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("TelegramUpdateId")
+                    b.Property<long?>("TelegramUpdateId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Text")

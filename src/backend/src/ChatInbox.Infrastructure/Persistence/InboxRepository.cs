@@ -34,6 +34,14 @@ public sealed class InboxRepository(ChatInboxDbContext dbContext) : IInboxReposi
             conversation => conversation.PublicId == conversationId,
             cancellationToken);
 
+    public Task<Message?> GetMessageByPublicIdAsync(
+        Guid messageId,
+        CancellationToken cancellationToken) =>
+        dbContext.Messages
+            .Include(message => message.Conversation)
+            .ThenInclude(conversation => conversation.Contact)
+            .SingleOrDefaultAsync(message => message.PublicId == messageId, cancellationToken);
+
     public Task<Message> GetLatestMessageAsync(
         long conversationId,
         CancellationToken cancellationToken) =>

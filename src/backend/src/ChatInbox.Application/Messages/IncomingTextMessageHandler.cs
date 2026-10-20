@@ -22,7 +22,7 @@ public sealed class IncomingTextMessageHandler(IInboxRepository repository)
             var latestMessage = await repository.GetLatestMessageAsync(
                 existingMessage.ConversationId,
                 cancellationToken);
-            return CreateIntegrationEvent(latestMessage);
+            return ConversationUpdatedEventFactory.Create(latestMessage);
         }
 
         var contact = await repository.GetContactByTelegramUserIdAsync(
@@ -59,29 +59,6 @@ public sealed class IncomingTextMessageHandler(IInboxRepository repository)
         var latestMessageAfterSave = await repository.GetLatestMessageAsync(
             message.ConversationId,
             cancellationToken);
-        return CreateIntegrationEvent(latestMessageAfterSave);
-    }
-
-    private static ConversationUpdatedIntegrationEvent CreateIntegrationEvent(Message message)
-    {
-        var conversation = message.Conversation;
-        var contact = conversation.Contact;
-
-        return new ConversationUpdatedIntegrationEvent(
-            new ConversationUpdatedEvent(
-                conversation.PublicId,
-                new ContactSummary(
-                    contact.PublicId,
-                    contact.FirstName,
-                    contact.LastName,
-                    contact.Username),
-                new MessageSummary(
-                    message.PublicId,
-                    message.Text,
-                    "incoming",
-                    message.TelegramSentAt,
-                    message.ReceivedAt),
-                conversation.UnreadCount,
-                conversation.LastMessageAt ?? message.TelegramSentAt));
+        return ConversationUpdatedEventFactory.Create(latestMessageAfterSave);
     }
 }

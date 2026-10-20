@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { MessageSummary } from '../../../domain/models/conversation-summary';
 import { InboxDateTimePipe } from '../../pipes/inbox-date-time.pipe';
 
@@ -11,4 +11,15 @@ import { InboxDateTimePipe } from '../../pipes/inbox-date-time.pipe';
 })
 export class MessageBubbleComponent {
   readonly message = input.required<MessageSummary>();
+
+  protected readonly statusLabel = computed(() => {
+    const labels: Record<MessageSummary['status'], string> = {
+      received: 'Received',
+      pending: 'Pending',
+      sent: 'Sent',
+      failed: 'Failed',
+    };
+
+    return labels[this.message().status];
+  });
 }

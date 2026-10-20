@@ -12,9 +12,11 @@ public sealed class Message
 
     private Message(
         Conversation conversation,
-        long telegramUpdateId,
-        long telegramMessageId,
+        long? telegramUpdateId,
+        long? telegramMessageId,
         string text,
+        MessageDirection direction,
+        MessageStatus status,
         DateTimeOffset telegramSentAt,
         DateTimeOffset receivedAt)
     {
@@ -23,7 +25,8 @@ public sealed class Message
         TelegramUpdateId = telegramUpdateId;
         TelegramMessageId = telegramMessageId;
         Text = text;
-        Direction = MessageDirection.Incoming;
+        Direction = direction;
+        Status = status;
         TelegramSentAt = telegramSentAt;
         ReceivedAt = receivedAt;
     }
@@ -32,10 +35,11 @@ public sealed class Message
     public Guid PublicId { get; private set; }
     public long ConversationId { get; private set; }
     public Conversation Conversation { get; private set; } = null!;
-    public long TelegramUpdateId { get; private set; }
-    public long TelegramMessageId { get; private set; }
+    public long? TelegramUpdateId { get; private set; }
+    public long? TelegramMessageId { get; private set; }
     public string Text { get; private set; } = string.Empty;
     public MessageDirection Direction { get; private set; }
+    public MessageStatus Status { get; private set; }
     public DateTimeOffset TelegramSentAt { get; private set; }
     public DateTimeOffset ReceivedAt { get; private set; }
 
@@ -71,7 +75,65 @@ public sealed class Message
             telegramUpdateId,
             telegramMessageId,
             text,
+            MessageDirection.Incoming,
+            MessageStatus.Received,
             telegramSentAt,
             receivedAt);
+    }
+
+    internal static Message CreateOutgoing(
+        Conversation conversation,
+        string text,
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(conversation);
+        ValidateText(text);
+
+        return new Message(
+            conversation,
+            null,
+            null,
+            text,
+            MessageDirection.Outgoing,
+            MessageStatus.Pending,
+            createdAt,
+            createdAt);
+    }
+
+    public void MarkSent(long telegramMessageId, DateTimeOffset telegramSentAt)
+    {
+        if (Direction != MessageDirection.Outgoing || Status != MessageStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending outgoing messages can be marked as sent");
+        }
+
+        if (telegramMessageId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(telegramMessageId));
+        }
+
+        TelegramMessageId = telegramMessageId;
+        TelegramSentAt = telegramSentAt;
+        Status = MessageStatus.Sent;
+    }
+
+    public void MarkFailed()
+    {
+        if (Direction != MessageDirection.Outgoing || Status != MessageStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending outgoing messages can be marked as failed");
+        }
+
+        Status = MessageStatus.Failed;
+    }
+
+    private static void ValidateText(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        if (text.Length > MaximumTextLength)
+        {
+            throw new ArgumentOutOfRangeException(nameof(text));
+        }
     }
 }

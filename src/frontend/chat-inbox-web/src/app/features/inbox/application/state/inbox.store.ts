@@ -1,11 +1,18 @@
 import { computed, Injectable, signal } from '@angular/core';
 import { ConversationSummary, MessageSummary } from '../../domain/models/conversation-summary';
+import { ConnectionStatus } from '../../domain/models/connection-status';
 import { InboxFilter } from '../../domain/models/inbox-filter';
 
 export interface OptimisticReadSnapshot {
   readonly conversationId: string;
   readonly lastMessageId: string;
   readonly unreadCount: number;
+}
+
+export interface OptimisticSendSnapshot {
+  readonly conversationId: string;
+  readonly temporaryMessageId: string;
+  readonly previousConversation: ConversationSummary;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -17,6 +24,7 @@ export class InboxStore {
     new Map(),
   );
   private readonly loadingHistoriesState = signal<ReadonlySet<string>>(new Set());
+  private readonly connectionStatusState = signal<ConnectionStatus>('disconnected');
 
   readonly activeFilter = this.activeFilterState.asReadonly();
   readonly selectedConversationId = this.selectedConversationIdState.asReadonly();
@@ -39,6 +47,7 @@ export class InboxStore {
     const conversationId = this.selectedConversationId();
     return conversationId ? this.loadingHistoriesState().has(conversationId) : false;
   });
+  readonly connectionStatus = this.connectionStatusState.asReadonly();
   readonly visibleConversations = computed(() => {
     const conversations = this.conversations();
     const selectedConversationId = this.selectedConversationId();
@@ -55,8 +64,12 @@ export class InboxStore {
     this.activeFilterState.set(filter);
   }
 
-  selectConversation(conversationId: string): void {
+  selectConversation(conversationId: string | null): void {
     this.selectedConversationIdState.set(conversationId);
+  }
+
+  setConnectionStatus(status: ConnectionStatus): void {
+    this.connectionStatusState.set(status);
   }
 
   mergeConversations(conversations: readonly ConversationSummary[]): void {
@@ -159,7 +172,7 @@ export class InboxStore {
     });
   }
 
-  appendMessage(conversationId: string, message: MessageSummary): void {
+  upsertMessage(conversationId: string, message: MessageSummary): void {
     if (this.selectedConversationId() !== conversationId) {
       return;
     }
@@ -167,12 +180,111 @@ export class InboxStore {
     this.messagesState.update((current) => {
       const messages = current.get(conversationId) ?? [];
 
-      if (messages.some(({ id }) => id === message.id)) {
+      const next = new Map(current);
+      const existingIndex = messages.findIndex(({ id }) => id === message.id);
+      const updatedMessages =
+        existingIndex === -1
+          ? [...messages, message]
+          : messages.map((existingMessage, index) =>
+              index === existingIndex ? message : existingMessage,
+            );
+      next.set(conversationId, updatedMessages);
+      return next;
+    });
+  }
+
+  optimisticallySendMessage(conversationId: string, text: string): OptimisticSendSnapshot | null {
+    const conversation = this.conversationsState().get(conversationId);
+
+    if (!conversation) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const message: MessageSummary = {
+      id: crypto.randomUUID(),
+      text,
+      direction: 'outgoing',
+      status: 'pending',
+      telegramSentAt: now,
+      receivedAt: now,
+    };
+    const snapshot: OptimisticSendSnapshot = {
+      conversationId,
+      temporaryMessageId: message.id,
+      previousConversation: conversation,
+    };
+
+    this.upsertMessage(conversationId, message);
+    this.conversationsState.update((current) => {
+      const next = new Map(current);
+      next.set(conversationId, {
+        ...conversation,
+        lastMessage: message,
+        lastMessageAt: now,
+      });
+      return next;
+    });
+
+    return snapshot;
+  }
+
+  confirmOptimisticMessage(snapshot: OptimisticSendSnapshot, message: MessageSummary): void {
+    this.messagesState.update((current) => {
+      const messages = current.get(snapshot.conversationId) ?? [];
+      const withoutTemporary = messages.filter(({ id }) => id !== snapshot.temporaryMessageId);
+      const existingIndex = withoutTemporary.findIndex(({ id }) => id === message.id);
+      const existingMessage = existingIndex === -1 ? null : withoutTemporary[existingIndex];
+      const confirmedMessage =
+        existingMessage && existingMessage.status !== 'pending' ? existingMessage : message;
+      const confirmedMessages =
+        existingIndex === -1
+          ? [...withoutTemporary, confirmedMessage]
+          : withoutTemporary.map((currentMessage, index) =>
+              index === existingIndex ? confirmedMessage : currentMessage,
+            );
+      const next = new Map(current);
+      next.set(snapshot.conversationId, confirmedMessages);
+      return next;
+    });
+
+    this.conversationsState.update((current) => {
+      const conversation = current.get(snapshot.conversationId);
+
+      if (!conversation || conversation.lastMessage.id !== snapshot.temporaryMessageId) {
         return current;
       }
 
       const next = new Map(current);
-      next.set(conversationId, [...messages, message]);
+      next.set(snapshot.conversationId, {
+        ...conversation,
+        lastMessage: message,
+        lastMessageAt: message.telegramSentAt,
+      });
+      return next;
+    });
+  }
+
+  rollbackOptimisticMessage(snapshot: OptimisticSendSnapshot): void {
+    this.messagesState.update((current) => {
+      const messages = current.get(snapshot.conversationId) ?? [];
+      const next = new Map(current);
+      next.set(
+        snapshot.conversationId,
+        messages.filter(({ id }) => id !== snapshot.temporaryMessageId),
+      );
+      return next;
+    });
+
+    this.conversationsState.update((current) => {
+      const conversation = current.get(snapshot.conversationId);
+
+      if (!conversation || conversation.lastMessage.id !== snapshot.temporaryMessageId) {
+        return current;
+      }
+
+      const next = new Map(current);
+      next.set(snapshot.conversationId, snapshot.previousConversation);
       return next;
     });
   }

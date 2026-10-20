@@ -9,6 +9,7 @@ export interface MessageSummary {
   readonly id: string;
   readonly text: string;
   readonly direction: 'incoming' | 'outgoing';
+  readonly status: 'received' | 'pending' | 'sent' | 'failed';
   readonly telegramSentAt: string;
   readonly receivedAt: string;
 }

@@ -31,6 +31,8 @@ public sealed class RabbitMqIntegrationEventPublisher(IRabbitMqConnection rabbit
         var queue = routingKey switch
         {
             RabbitMqTopology.IncomingTextRoutingKey => RabbitMqTopology.IncomingTextQueue,
+            RabbitMqTopology.OutgoingTextRoutingKey => RabbitMqTopology.OutgoingTextQueue,
+            RabbitMqTopology.OutgoingTextFailedRoutingKey => RabbitMqTopology.OutgoingTextDeadLetterQueue,
             RabbitMqTopology.ConversationUpdatedRoutingKey => RabbitMqTopology.ConversationUpdatesQueue,
             _ => throw new ArgumentOutOfRangeException(nameof(routingKey))
         };
