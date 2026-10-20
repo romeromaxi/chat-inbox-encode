@@ -1,0 +1,164 @@
+name: ${COMPOSE_PROJECT_NAME:-chat-inbox-encode}
+
+services:
+  web:
+    build:
+      context: ./src/frontend/chat-inbox-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - application
+
+  api:
+    build:
+      context: ./src/backend
+      dockerfile: src/ChatInbox.Api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${API_PORT:-5080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN}
+      Telegram__WebhookSecretToken: ${TELEGRAM_WEBHOOK_SECRET_TOKEN}
+      Telegram__WebhookUrl: ${NGROK_RESERVED_URL}/webhooks/telegram
+      Telegram__PrivateChatsOnly: "true"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - application
+      - database
+      - broker
+
+  migrator:
+    build:
+      context: ./src/backend
+      dockerfile: src/ChatInbox.Migrator/Dockerfile
+    restart: "no"
+    environment:
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+
+  worker:
+    build:
+      context: ./src/backend
+      dockerfile: src/ChatInbox.Worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN}
+      Telegram__PrivateChatsOnly: "true"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - application
+      - database
+      - broker
+
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - database
+
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - broker
+      - management
+
+  webhook-ingress:
+    image: ${NGINX_IMAGE}
+    restart: unless-stopped
+    volumes:
+      - ./infra/ingress/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - application
+      - edge
+
+  ngrok:
+    image: ${NGROK_IMAGE}
+    restart: unless-stopped
+    command:
+      - http
+      - webhook-ingress:8080
+      - --url=${NGROK_RESERVED_URL}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    depends_on:
+      webhook-ingress:
+        condition: service_started
+    networks:
+      - edge
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+
+networks:
+  application:
+  database:
+    internal: true
+  broker:
+    internal: true
+  management:
+  edge:
+
