@@ -16,8 +16,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatInbox.Worker", "src\Cha
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatInbox.Migrator", "src\ChatInbox.Migrator\ChatInbox.Migrator.csproj", "{109EB352-49CB-46BB-B7DB-C10315C9FE57}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatInbox.Api.UnitTests", "..\..\tests\backend\ChatInbox.Api.UnitTests\ChatInbox.Api.UnitTests.csproj", "{B2E54A73-6EA9-460A-AC57-58D9D25B94D7}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
