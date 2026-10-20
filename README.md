@@ -173,4 +173,14 @@ docker compose exec -T api sh -c 'curl --fail --silent --show-error "https://api
 
 `result.url` debe coincidir con `NGROK_RESERVED_URL` más `/webhooks/telegram`.
 
+## 5. Supuestos
+
+- No se implementan autenticación ni gestión de usuarios.
+- Sólo se procesan mensajes de texto enviados desde chats privados de Telegram.
+- El operador no puede iniciar conversaciones; sólo puede responder a usuarios que hayan enviado previamente un mensaje al bot.
+- El bot no envía una respuesta automática inicial. La conversación comienza con el mensaje del usuario y continúa cuando un operador responde desde la bandeja.
+- Telegram no informa al bot si el usuario leyó una respuesta; el estado `Sent` sólo confirma que Telegram aceptó el envío.
+- La interfaz está orientada exclusivamente a monitores de escritorio; no se contempla su uso en móviles ni tablets.
+- PostgreSQL y RabbitMQ conservan sus datos en volúmenes Docker entre reinicios.
+
 
