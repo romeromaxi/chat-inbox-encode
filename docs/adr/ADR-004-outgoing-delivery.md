@@ -1,4 +1,4 @@
-# ADR-005: Entrega saliente, reintentos y orden temporal
+# ADR-004: Entrega saliente, reintentos y orden temporal
 
 **Estado:** Aceptado
 
