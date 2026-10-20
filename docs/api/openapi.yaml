@@ -1,0 +1,417 @@
+openapi: 3.0.3
+info:
+  title: Chat Inbox Encode API
+  version: 1.2.0
+  description: >-
+    API para recibir el webhook de Telegram, consultar conversaciones, leer historial,
+    marcar conversaciones como leídas y publicar respuestas asíncronas hacia Telegram.
+    Las actualizaciones posteriores se notifican al frontend mediante SignalR.
+servers:
+  - url: http://127.0.0.1:5080
+    description: Docker Compose local con API_PORT por defecto
+tags:
+  - name: Health
+    description: Estado del proceso API y de sus dependencias.
+  - name: Telegram
+    description: Recepción autenticada de updates enviados por Telegram.
+  - name: Conversations
+    description: Consulta y operación sobre conversaciones y mensajes.
+x-signalr:
+  hub: /hubs/inbox
+  description: >-
+    Canal de actualizaciones en tiempo real. El snapshot inicial y la resincronización
+    se obtienen mediante los endpoints HTTP de conversaciones.
+  serverToClientEvents:
+    conversationUpdated:
+      payload:
+        $ref: "#/components/schemas/ConversationUpdatedEvent"
+paths:
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Verificar liveness de la API
+      operationId: getLiveness
+      responses:
+        "200":
+          description: El proceso API está activo.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Healthy
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Verificar readiness de la API
+      operationId: getReadiness
+      responses:
+        "200":
+          description: PostgreSQL y RabbitMQ están disponibles.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Healthy
+        "503":
+          description: PostgreSQL o RabbitMQ no están disponibles.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Unhealthy
+  /webhooks/telegram:
+    post:
+      tags:
+        - Telegram
+      summary: Recibir un update de Telegram
+      description: >-
+        Valida el secret header. Publica en RabbitMQ los mensajes de texto de chats privados
+        y responde 200 a los updates fuera de alcance que deben ignorarse.
+      operationId: receiveTelegramUpdate
+      security:
+        - TelegramWebhookSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramUpdate"
+            example:
+              update_id: 1000001
+              message:
+                message_id: 1001
+                date: 1700000000
+                chat:
+                  id: 123456789
+                  type: private
+                from:
+                  id: 123456789
+                  first_name: Local
+                  username: local_test
+                text: Mensaje de prueba
+      responses:
+        "200":
+          description: Update publicado con publisher confirm o ignorado por estar fuera de alcance.
+        "400":
+          description: JSON inválido o datos requeridos fuera de rango.
+        "401":
+          description: Secret header ausente, repetido o incorrecto.
+  /api/conversations:
+    get:
+      tags:
+        - Conversations
+      summary: Listar conversaciones
+      description: Devuelve conversaciones ordenadas por lastMessageAt descendente y conversationId ascendente.
+      operationId: getConversations
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          description: Si es true, devuelve sólo conversaciones con unreadCount mayor que cero.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Lista de conversaciones sin envelope.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummary"
+        "400":
+          description: El valor de unreadOnly no puede interpretarse como booleano.
+  /api/conversations/{conversationId}/messages:
+    get:
+      tags:
+        - Conversations
+      summary: Obtener historial de una conversación
+      description: Devuelve mensajes ordenados por telegramSentAt ascendente.
+      operationId: getConversationMessages
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Historial sin envelope.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageSummary"
+        "404":
+          description: La conversación no existe. La respuesta no contiene body.
+    post:
+      tags:
+        - Conversations
+      summary: Enviar un mensaje de texto al contacto
+      description: >-
+        Persiste el mensaje saliente en estado pending, actualiza la fecha de la conversación
+        y publica el trabajo en RabbitMQ. La respuesta 202 no confirma la entrega: el estado
+        cambia luego a sent si Telegram Bot API acepta el mensaje o a failed cuando se agotan
+        el intento inicial y los dos reintentos.
+      operationId: sendConversationMessage
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            example:
+              text: Respuesta de prueba desde la bandeja
+      responses:
+        "202":
+          description: Mensaje persistido y aceptado para procesamiento asíncrono.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageSummary"
+              example:
+                id: 7f45098b-7d95-48ea-a73d-53ec3a13ac1e
+                text: Respuesta de prueba desde la bandeja
+                direction: outgoing
+                status: pending
+                telegramSentAt: "2026-10-19T20:30:00-03:00"
+                receivedAt: "2026-10-19T20:30:00-03:00"
+        "400":
+          description: El body es inválido, el texto está vacío o supera los 4096 caracteres.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ValidationProblemDetails"
+              example:
+                title: One or more validation errors occurred.
+                status: 400
+                errors:
+                  Text:
+                    - Text is required and cannot exceed 4096 characters.
+        "404":
+          description: La conversación no existe. La respuesta no contiene body.
+  /api/conversations/{conversationId}/read:
+    post:
+      tags:
+        - Conversations
+      summary: Marcar una conversación como leída
+      description: Operación idempotente que establece unreadCount en cero. No recibe body.
+      operationId: markConversationAsRead
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "204":
+          description: La conversación quedó marcada como leída. La respuesta no contiene body.
+        "404":
+          description: La conversación no existe. La respuesta no contiene body.
+components:
+  securitySchemes:
+    TelegramWebhookSecret:
+      type: apiKey
+      in: header
+      name: X-Telegram-Bot-Api-Secret-Token
+  parameters:
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      description: Identificador público de la conversación.
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    TelegramUpdate:
+      type: object
+      required:
+        - update_id
+      properties:
+        update_id:
+          type: integer
+          format: int64
+          minimum: 0
+        message:
+          allOf:
+            - $ref: "#/components/schemas/TelegramMessage"
+          nullable: true
+        edited_message:
+          allOf:
+            - $ref: "#/components/schemas/TelegramMessage"
+          nullable: true
+    TelegramMessage:
+      type: object
+      required:
+        - message_id
+        - date
+      properties:
+        message_id:
+          type: integer
+          format: int64
+          minimum: 1
+        date:
+          type: integer
+          format: int64
+          description: Unix timestamp en segundos.
+        chat:
+          allOf:
+            - $ref: "#/components/schemas/TelegramChat"
+          nullable: true
+        from:
+          allOf:
+            - $ref: "#/components/schemas/TelegramUser"
+          nullable: true
+        text:
+          type: string
+          maxLength: 4096
+          nullable: true
+    TelegramChat:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        type:
+          type: string
+          example: private
+    TelegramUser:
+      type: object
+      required:
+        - id
+        - first_name
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+    ConversationSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - conversationId
+        - contact
+        - lastMessage
+        - unreadCount
+        - lastMessageAt
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+        contact:
+          $ref: "#/components/schemas/ContactSummary"
+        lastMessage:
+          $ref: "#/components/schemas/MessageSummary"
+        unreadCount:
+          type: integer
+          format: int32
+          minimum: 0
+        lastMessageAt:
+          type: string
+          format: date-time
+    ContactSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - firstName
+        - lastName
+        - username
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+          maxLength: 255
+        lastName:
+          type: string
+          maxLength: 255
+          nullable: true
+        username:
+          type: string
+          maxLength: 255
+          nullable: true
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          pattern: '\S'
+    ValidationProblemDetails:
+      type: object
+      additionalProperties: true
+      required:
+        - title
+        - status
+        - errors
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    MessageSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - text
+        - direction
+        - status
+        - telegramSentAt
+        - receivedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+          maxLength: 4096
+        direction:
+          type: string
+          enum:
+            - incoming
+            - outgoing
+        status:
+          type: string
+          description: Entrantes usan received; salientes evolucionan de pending a sent o failed.
+          enum:
+            - received
+            - pending
+            - sent
+            - failed
+        telegramSentAt:
+          type: string
+          format: date-time
+        receivedAt:
+          type: string
+          format: date-time
+    ConversationUpdatedEvent:
+      description: Payload del evento SignalR conversationUpdated.
+      allOf:
+        - $ref: "#/components/schemas/ConversationSummary"
+
