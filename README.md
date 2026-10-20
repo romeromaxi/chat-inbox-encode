@@ -184,3 +184,8 @@ docker compose exec -T api sh -c 'curl --fail --silent --show-error "https://api
 - PostgreSQL y RabbitMQ conservan sus datos en volúmenes Docker entre reinicios.
 
 
+## Documentación de referencia
+
+- [Diagramas C4](docs/c4/)
+- [Decisiones de arquitectura](docs/adr/)
+- [Contrato API](docs/api/openapi.yaml)
